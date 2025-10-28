@@ -8,10 +8,13 @@ import RecipeCard from './components/RecipeCard';
 import RecipeModal from './components/RecipeModal';
 import LoadingSpinner from './components/LoadingSpinner';
 import ErrorMessage from './components/ErrorMessage';
+import IngredientSelector from './components/IngredientSelector';
+import SurpriseMeButton from './components/SurpriseMeButton';
 import './App.css';
 
 function App() {
   const [searchInput, setSearchInput] = useState('');
+  const [selectedIngredients, setSelectedIngredients] = useState([]);
 
   const {
     recipes,
@@ -19,7 +22,9 @@ function App() {
     loading,
     error,
     searchRecipes,
+    searchRecipesByMultipleIngredients,
     getRecipeDetails,
+    getRandomRecipe,
     toggleFavorite,
     isRecipeFavorited,
     clearSelectedRecipe,
@@ -27,12 +32,37 @@ function App() {
   } = useRecipes();
 
   const handleSearch = () => {
-    searchRecipes(searchInput);
+    if (selectedIngredients.length > 0) {
+      searchRecipesByMultipleIngredients(selectedIngredients);
+    } else if (searchInput.trim()) {
+      searchRecipes(searchInput);
+    }
+  };
+
+  const handleAddIngredient = () => {
+    if (searchInput.trim() && !selectedIngredients.includes(searchInput.trim().toLowerCase())) {
+      setSelectedIngredients([...selectedIngredients, searchInput.trim().toLowerCase()]);
+      setSearchInput('');
+    }
+  };
+
+  const handleRemoveIngredient = (ingredient) => {
+    setSelectedIngredients(selectedIngredients.filter(ing => ing !== ingredient));
   };
 
   const handleQuickSearch = (ingredient) => {
-    setSearchInput(ingredient);
-    searchRecipes(ingredient);
+    if (!selectedIngredients.includes(ingredient.toLowerCase())) {
+      setSelectedIngredients([...selectedIngredients, ingredient.toLowerCase()]);
+    }
+  };
+
+  const handleClearAll = () => {
+    setSelectedIngredients([]);
+    setSearchInput('');
+  };
+
+  const handleSurpriseMe = () => {
+    getRandomRecipe();
   };
 
   return (
@@ -48,16 +78,28 @@ function App() {
           <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-gray-900 mb-4">
             Hey Taylor! 👋
           </h2>
-          <p className="text-lg sm:text-xl text-gray-600 max-w-2xl mx-auto px-4">
+          <p className="text-lg sm:text-xl text-gray-600 max-w-2xl mx-auto px-4 mb-6">
             What's in your kitchen today? Let's cook something amazing!
           </p>
+          
+          {/* Surprise Me Button */}
+          <div className="flex justify-center mb-8">
+            <SurpriseMeButton 
+              onClick={handleSurpriseMe} 
+              loading={loading}
+            />
+          </div>
         </div>
 
-        {/* Search Bar */}
-        <SearchBar
-          value={searchInput}
-          onChange={setSearchInput}
+        {/* Ingredient Selector */}
+        <IngredientSelector
+          searchInput={searchInput}
+          selectedIngredients={selectedIngredients}
+          onSearchInputChange={setSearchInput}
+          onAddIngredient={handleAddIngredient}
+          onRemoveIngredient={handleRemoveIngredient}
           onSearch={handleSearch}
+          onClearAll={handleClearAll}
           loading={loading}
         />
 
@@ -77,7 +119,8 @@ function App() {
         {!loading && recipes.length > 0 && (
           <div className="px-4">
             <h3 className="text-xl sm:text-2xl font-bold text-gray-900 mb-6">
-              Found {recipes.length} recipe{recipes.length !== 1 ? 's' : ''} for you!
+              Found {recipes.length} recipe{recipes.length !== 1 ? 's' : ''}
+              {selectedIngredients.length > 0 && ` with ${selectedIngredients.join(', ')}`}!
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
               {recipes.map((recipe) => (
@@ -94,10 +137,10 @@ function App() {
         )}
 
         {/* Empty State */}
-        {!loading && !error && recipes.length === 0 && searchInput && (
+        {!loading && !error && recipes.length === 0 && selectedIngredients.length === 0 && !searchInput && (
           <div className="text-center py-12 px-4">
             <p className="text-gray-600 text-lg">
-              Start by searching for an ingredient or click on a popular option above!
+              Start by adding ingredients, click on a popular option, or try the Surprise Me button! 🎲
             </p>
           </div>
         )}
