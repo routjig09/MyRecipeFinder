@@ -7,7 +7,7 @@ export const useRecipes = () => {
   const [error, setError] = useState("");
   const [favorites, setFavorites] = useState([]);
 
- 
+  // 🔍 Search recipes by single ingredient - USING ASSIGNED API
   const searchRecipes = async (ingredient) => {
     if (!ingredient || !ingredient.trim()) {
       setError("Please enter an ingredient");
@@ -47,7 +47,7 @@ export const useRecipes = () => {
     }
   };
 
-  
+  // 🔍🔍 Search recipes by MULTIPLE ingredients with VERIFICATION
   const searchRecipesByMultipleIngredients = async (ingredients) => {
     if (!ingredients || ingredients.length === 0) {
       setError("Please add at least one ingredient");
@@ -59,7 +59,7 @@ export const useRecipes = () => {
     setRecipes([]);
 
     try {
-      
+      // Step 1: Fetch recipes for each ingredient separately
       const fetchPromises = ingredients.map((ingredient) =>
         fetch(
           `https://www.themealdb.com/api/json/v1/1/filter.php?i=${ingredient.trim()}`
@@ -67,9 +67,9 @@ export const useRecipes = () => {
       );
 
       const results = await Promise.all(fetchPromises);
-      console.log("Multi-ingredient results:", results);
+      console.log("Multi-ingredient filter results:", results);
 
-
+      // Filter out null/empty results
       const validResults = results.filter(
         (result) => result.meals && result.meals.length > 0
       );
@@ -83,14 +83,7 @@ export const useRecipes = () => {
         return;
       }
 
-      
-      if (validResults.length === 1) {
-        setRecipes(validResults[0].meals);
-        setLoading(false);
-        return;
-      }
-
- 
+      // Step 2: Find recipes that appear in ALL ingredient searches (intersection)
       const recipeMaps = validResults.map((result) => {
         const recipeMap = new Map();
         result.meals.forEach((meal) => {
@@ -100,21 +93,75 @@ export const useRecipes = () => {
       });
 
       const baseRecipes = Array.from(recipeMaps[0].values());
+      const commonRecipeIds = baseRecipes
+        .filter((recipe) => recipeMaps.every((map) => map.has(recipe.idMeal)))
+        .map((recipe) => recipe.idMeal);
 
-    
-      const commonRecipes = baseRecipes.filter((recipe) =>
-        recipeMaps.every((map) => map.has(recipe.idMeal))
+      if (commonRecipeIds.length === 0) {
+        setError(
+          `No recipes found with ALL ${ingredients.length} ingredients. Try different combinations!`
+        );
+        setRecipes([]);
+        setLoading(false);
+        return;
+      }
+
+      console.log(`Found ${commonRecipeIds.length} potential recipes. Verifying ingredients...`);
+
+      // Step 3: Fetch full details for each recipe and verify ingredients
+      const detailsPromises = commonRecipeIds.map((id) =>
+        fetch(`https://www.themealdb.com/api/json/v1/1/lookup.php?i=${id}`)
+          .then((res) => res.json())
       );
 
-      if (commonRecipes.length > 0) {
-        setRecipes(commonRecipes);
-        console.log(`Found ${commonRecipes.length} recipes with all ingredients`);
+      const detailsResults = await Promise.all(detailsPromises);
+      console.log("Fetched recipe details:", detailsResults);
+
+      // Step 4: Verify that ALL selected ingredients are in the recipe
+      const verifiedRecipes = [];
+
+      detailsResults.forEach((result) => {
+        if (result.meals && result.meals[0]) {
+          const meal = result.meals[0];
+          
+          // Extract all ingredients from the recipe (strIngredient1 to strIngredient20)
+          const recipeIngredients = [];
+          for (let i = 1; i <= 20; i++) {
+            const ingredient = meal[`strIngredient${i}`];
+            if (ingredient && ingredient.trim()) {
+              recipeIngredients.push(ingredient.toLowerCase().trim());
+            }
+          }
+
+          console.log(`Recipe: ${meal.strMeal}, Ingredients:`, recipeIngredients);
+
+          // Check if ALL selected ingredients are in the recipe
+          const hasAllIngredients = ingredients.every((selectedIng) => {
+            const normalizedSelected = selectedIng.toLowerCase().trim();
+            return recipeIngredients.some((recipeIng) =>
+              recipeIng.includes(normalizedSelected) || normalizedSelected.includes(recipeIng)
+            );
+          });
+
+          if (hasAllIngredients) {
+            verifiedRecipes.push({
+              idMeal: meal.idMeal,
+              strMeal: meal.strMeal,
+              strMealThumb: meal.strMealThumb,
+            });
+          }
+        }
+      });
+
+      console.log(`Verified ${verifiedRecipes.length} recipes with all ingredients`);
+
+      if (verifiedRecipes.length > 0) {
+        setRecipes(verifiedRecipes);
       } else {
-        
         setError(
-          `No recipes found with ALL ${ingredients.length} ingredients. Showing recipes with "${ingredients[0]}" instead.`
+          `No recipes found with ALL ${ingredients.length} ingredients: ${ingredients.join(', ')}. Try different combinations!`
         );
-        setRecipes(validResults[0].meals);
+        setRecipes([]);
       }
     } catch (err) {
       console.error("Error fetching recipes:", err);
@@ -127,7 +174,7 @@ export const useRecipes = () => {
     }
   };
 
-  
+  // 🎲 Get a random recipe
   const getRandomRecipe = async () => {
     setLoading(true);
     setError("");
@@ -145,7 +192,6 @@ export const useRecipes = () => {
       console.log("Random Recipe:", data);
 
       if (data.meals && data.meals.length > 0) {
-        
         setSelectedRecipe(data.meals[0]);
       } else {
         setError("Could not fetch a random recipe. Try again!");
@@ -158,7 +204,7 @@ export const useRecipes = () => {
     }
   };
 
-  
+  // 📜 Get full recipe details by ID
   const getRecipeDetails = async (id) => {
     if (!id) return;
 
@@ -189,7 +235,7 @@ export const useRecipes = () => {
     }
   };
 
-  
+  // ❤️ Toggle favorite recipe
   const toggleFavorite = (recipeId) => {
     setFavorites((prev) =>
       prev.includes(recipeId)
@@ -198,13 +244,13 @@ export const useRecipes = () => {
     );
   };
 
- 
+  // ⭐ Check if recipe is already favorited
   const isRecipeFavorited = (recipeId) => favorites.includes(recipeId);
 
- 
+  // 🧹 Clear selected recipe
   const clearSelectedRecipe = () => setSelectedRecipe(null);
 
- 
+  // 🧹 Clear error message
   const clearError = () => setError("");
 
   return {
